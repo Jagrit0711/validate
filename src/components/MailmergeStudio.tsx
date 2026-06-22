@@ -8,9 +8,10 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { toast } from "sonner";
-import { Upload, Download, Type, QrCode, Hash, Calendar, X, Settings, Plus, Image as ImageIcon, ArrowLeft } from "lucide-react";
+import { Upload, Download, Type, QrCode, Hash, Calendar, X, Settings, Plus, Image as ImageIcon, ArrowLeft, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 
 type ElementType = "text" | "qr" | "code" | "date" | "csv";
+type TextAlign = "left" | "center" | "right";
 
 export type CanvasElement = {
   id: string;
@@ -24,7 +25,13 @@ export type CanvasElement = {
   fontSize: number;
   color: string;
   fontFamily: string;
+  textAlign: TextAlign;
 };
+
+// Default width (in canvas px) for new text elements. Gives the text a box to
+// align within, so "center" / "right" have something to align against and the
+// on-screen preview matches the exported PDF.
+const DEFAULT_TEXT_WIDTH = 240;
 
 function genCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -147,11 +154,12 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
       column,
       x: 100,
       y: 100,
-      width: type === "qr" ? 150 : undefined,
+      width: type === "qr" ? 150 : DEFAULT_TEXT_WIDTH,
       height: type === "qr" ? 150 : undefined,
       fontSize: 24,
       color: "#000000",
       fontFamily: "Inter",
+      textAlign: "center",
     };
     setElements([...elements, newEl]);
     setSelectedElementId(newEl.id);
@@ -236,7 +244,21 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
             pdf.setTextColor(el.color);
             pdf.setFontSize(el.fontSize * scaleX);
             pdf.setFont(el.fontFamily, "normal");
-            pdf.text(String(text), x, y + (el.fontSize * scaleX), { baseline: "bottom" });
+
+            // Align the text inside the element's box so the PDF matches the
+            // on-screen preview. The box spans `width` (scaled); jsPDF aligns
+            // text around an anchor x, so we compute the anchor per alignment.
+            const boxWidth = (el.width || DEFAULT_TEXT_WIDTH) * scaleX;
+            const align: TextAlign = el.textAlign || "left";
+            let anchorX = x;
+            if (align === "center") anchorX = x + boxWidth / 2;
+            else if (align === "right") anchorX = x + boxWidth;
+
+            pdf.text(String(text), anchorX, y + (el.fontSize * scaleX), {
+              baseline: "bottom",
+              align,
+              maxWidth: boxWidth,
+            });
           }
         });
       }
@@ -350,11 +372,17 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
                 <Rnd
                   key={el.id}
                   position={{ x: el.x, y: el.y }}
-                  size={el.type === 'qr' ? { width: el.width || 100, height: el.height || 100 } : undefined}
+                  size={
+                    el.type === 'qr'
+                      ? { width: el.width || 100, height: el.height || 100 }
+                      : { width: el.width || DEFAULT_TEXT_WIDTH, height: "auto" }
+                  }
                   onDragStop={(e, d) => updateElement(el.id, { x: d.x, y: d.y })}
                   onResizeStop={(e, dir, ref, delta, pos) => {
                     if (el.type === 'qr') {
                       updateElement(el.id, { width: parseInt(ref.style.width), height: parseInt(ref.style.height), x: pos.x, y: pos.y });
+                    } else {
+                      updateElement(el.id, { width: parseInt(ref.style.width), x: pos.x, y: pos.y });
                     }
                   }}
                   bounds="parent"
@@ -364,17 +392,21 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
                     color: el.color,
                     fontSize: `${el.fontSize}px`,
                     fontFamily: el.fontFamily,
-                    whiteSpace: 'nowrap',
                     lineHeight: 1,
                   }}
-                  enableResizing={el.type === 'qr'}
+                  enableResizing={el.type === 'qr' ? true : { left: true, right: true, top: false, bottom: false, topLeft: false, topRight: false, bottomLeft: false, bottomRight: false }}
                 >
                   {el.type === 'qr' ? (
                     <div className="w-full h-full bg-white/90 rounded border border-border flex items-center justify-center overflow-hidden">
                        <QrCode className="w-1/2 h-1/2 text-black/50" />
                     </div>
                   ) : (
-                    <div className="px-1">{el.label}</div>
+                    <div
+                      className="px-1 w-full"
+                      style={{ textAlign: el.textAlign, whiteSpace: "nowrap", overflow: "visible" }}
+                    >
+                      {el.label}
+                    </div>
                   )}
                   <button 
                     onClick={(e) => { e.stopPropagation(); removeElement(el.id); }}
@@ -464,6 +496,44 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
                         onChange={e => updateElement(selectedElement.id, { fontSize: Number(e.target.value) })}
                         className="h-9 mt-1 bg-background"
                       />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium">Alignment</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Button
+                          type="button"
+                          variant={selectedElement.textAlign === "left" ? "default" : "outline"}
+                          size="sm"
+                          className="flex-1 h-9 bg-background/50"
+                          onClick={() => updateElement(selectedElement.id, { textAlign: "left" })}
+                          aria-label="Align left"
+                        >
+                          <AlignLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={selectedElement.textAlign === "center" ? "default" : "outline"}
+                          size="sm"
+                          className="flex-1 h-9 bg-background/50"
+                          onClick={() => updateElement(selectedElement.id, { textAlign: "center" })}
+                          aria-label="Align center"
+                        >
+                          <AlignCenter className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={selectedElement.textAlign === "right" ? "default" : "outline"}
+                          size="sm"
+                          className="flex-1 h-9 bg-background/50"
+                          onClick={() => updateElement(selectedElement.id, { textAlign: "right" })}
+                          aria-label="Align right"
+                        >
+                          <AlignRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">
+                        Drag the left/right handles on the canvas to resize the text box. Text aligns within it.
+                      </p>
                     </div>
                     <div>
                       <Label className="text-xs font-medium">Text Color</Label>
