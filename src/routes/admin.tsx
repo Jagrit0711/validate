@@ -132,7 +132,9 @@ function AdminPage() {
         const rows = res.data
           .map((r) => {
             const lower: Record<string, string> = {};
-            Object.entries(r).forEach(([k, v]) => (lower[k.trim().toLowerCase()] = String(v ?? "").trim()));
+            Object.entries(r).forEach(
+              ([k, v]) => (lower[k.trim().toLowerCase()] = String(v ?? "").trim()),
+            );
             return { name: lower.name || lower["full name"] || "", email: lower.email || "" };
           })
           .filter((r) => r.name && r.email);
@@ -190,13 +192,21 @@ function AdminPage() {
   if (authed === "no") {
     return (
       <div className="min-h-screen">
-        <Header right={<Button variant="ghost" onClick={signOut}>Sign out</Button>} />
+        <Header
+          right={
+            <Button variant="ghost" onClick={signOut}>
+              Sign out
+            </Button>
+          }
+        />
         <main className="max-w-md mx-auto px-6 py-20 text-center">
           <h1 className="text-2xl font-bold">Access denied</h1>
           <p className="text-muted-foreground mt-2">
             You do not have permission to access the admin dashboard.
           </p>
-          <Button className="mt-6" onClick={signOut}>Sign out</Button>
+          <Button className="mt-6" onClick={signOut}>
+            Sign out
+          </Button>
         </main>
       </div>
     );
@@ -225,12 +235,16 @@ function AdminPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-8 p-1 bg-card/60 border border-border/50">
-            <TabsTrigger value="studio" className="px-6 rounded-md">Mailmerge Studio</TabsTrigger>
-            <TabsTrigger value="quick" className="px-6 rounded-md">Quick Issue (No Template)</TabsTrigger>
+            <TabsTrigger value="studio" className="px-6 rounded-md">
+              Mailmerge Studio
+            </TabsTrigger>
+            <TabsTrigger value="quick" className="px-6 rounded-md">
+              Quick Issue (No Template)
+            </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="studio" className="mt-0">
-             {/* Studio is rendered fully above via the early return, but we keep the tab content for structural matching if needed */}
+            {/* Studio is rendered fully above via the early return, but we keep the tab content for structural matching if needed */}
           </TabsContent>
 
           <TabsContent value="quick" className="space-y-8 mt-0">
@@ -243,7 +257,11 @@ function AdminPage() {
                 </div>
                 <div>
                   <Label>Issued date</Label>
-                  <Input type="date" value={issuedDate} onChange={(e) => setIssuedDate(e.target.value)} />
+                  <Input
+                    type="date"
+                    value={issuedDate}
+                    onChange={(e) => setIssuedDate(e.target.value)}
+                  />
                 </div>
               </div>
             </section>
@@ -276,7 +294,11 @@ function AdminPage() {
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Plus className="h-4 w-4 text-primary" /> Add single
                 </h2>
-                <Input placeholder="Full name" value={manualName} onChange={(e) => setManualName(e.target.value)} />
+                <Input
+                  placeholder="Full name"
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                />
                 <Input
                   type="email"
                   placeholder="Email"
@@ -310,7 +332,12 @@ function AdminPage() {
                           <code className="text-xs bg-background/60 px-2 py-1 rounded font-mono truncate">
                             {it.code}
                           </code>
-                          <Button size="icon" variant="ghost" onClick={() => copy(it.code)} title="Copy code">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => copy(it.code)}
+                            title="Copy code"
+                          >
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
                         </div>

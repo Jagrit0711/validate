@@ -4,11 +4,29 @@ import { Rnd } from "react-rnd";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { supabase } from "@/lib/supabase";
+import { generateCertificateDesign } from "@/lib/gemini";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { toast } from "sonner";
-import { Upload, Download, Type, QrCode, Hash, Calendar, X, Settings, Plus, Image as ImageIcon, ArrowLeft, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import {
+  Upload,
+  Download,
+  Type,
+  QrCode,
+  Hash,
+  Calendar,
+  X,
+  Settings,
+  Plus,
+  Image as ImageIcon,
+  ArrowLeft,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Sparkles,
+  Wand,
+} from "lucide-react";
 
 type ElementType = "text" | "qr" | "code" | "date" | "csv";
 type TextAlign = "left" | "center" | "right";
@@ -41,40 +59,94 @@ function genCode() {
 }
 
 const GOOGLE_FONTS = [
-  "Roboto", "Open Sans", "Lato", "Montserrat", "Oswald", "Source Sans Pro", "Raleway", "PT Sans", 
-  "Merriweather", "Noto Sans", "Nunito", "Poppins", "Playfair Display", "Rubik", "Work Sans", 
-  "Lora", "Fira Sans", "Quicksand", "Inconsolata", "PT Serif", "Titillium Web", "Ubuntu", 
-  "Libre Franklin", "Oxygen", "Dosis", "Cabin", "Anton", "Josefin Sans", "Dancing Script", 
-  "Pacifico", "Exo 2", "Karla", "Signika", "Bebas Neue", "Comfortaa", "Caveat", "Righteous", 
-  "Fredoka", "Lobster", "Abril Fatface", "Audiowide", "Bangers", "Bungee", "Cinzel", 
-  "Cormorant Garamond", "EB Garamond", "Great Vibes", "Lilita One", "Orbitron", "Permanent Marker", 
-  "Press Start 2P", "Satisfy", "Special Elite", "Inter", "Outfit", "Space Grotesk", "Syne", 
-  "Clash Display", "Cabinet Grotesk"
+  "Roboto",
+  "Open Sans",
+  "Lato",
+  "Montserrat",
+  "Oswald",
+  "Source Sans Pro",
+  "Raleway",
+  "PT Sans",
+  "Merriweather",
+  "Noto Sans",
+  "Nunito",
+  "Poppins",
+  "Playfair Display",
+  "Rubik",
+  "Work Sans",
+  "Lora",
+  "Fira Sans",
+  "Quicksand",
+  "Inconsolata",
+  "PT Serif",
+  "Titillium Web",
+  "Ubuntu",
+  "Libre Franklin",
+  "Oxygen",
+  "Dosis",
+  "Cabin",
+  "Anton",
+  "Josefin Sans",
+  "Dancing Script",
+  "Pacifico",
+  "Exo 2",
+  "Karla",
+  "Signika",
+  "Bebas Neue",
+  "Comfortaa",
+  "Caveat",
+  "Righteous",
+  "Fredoka",
+  "Lobster",
+  "Abril Fatface",
+  "Audiowide",
+  "Bangers",
+  "Bungee",
+  "Cinzel",
+  "Cormorant Garamond",
+  "EB Garamond",
+  "Great Vibes",
+  "Lilita One",
+  "Orbitron",
+  "Permanent Marker",
+  "Press Start 2P",
+  "Satisfy",
+  "Special Elite",
+  "Inter",
+  "Outfit",
+  "Space Grotesk",
+  "Syne",
+  "Clash Display",
+  "Cabinet Grotesk",
 ].sort();
 
 // Helper to fetch TTF from Google Fonts and add to jsPDF
 const loadFontToPdf = async (pdf: jsPDF, fontFamily: string) => {
   try {
-    const cssRes = await fetch(`https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@400;700`, {
-      headers: {
-        // iOS Safari user agent forces TTF response from Google Fonts instead of WOFF2
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1'
-      }
-    });
+    const cssRes = await fetch(
+      `https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, "+")}:wght@400;700`,
+      {
+        headers: {
+          // iOS Safari user agent forces TTF response from Google Fonts instead of WOFF2
+          "User-Agent":
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1",
+        },
+      },
+    );
     const css = await cssRes.text();
     const match = css.match(/url\((https:\/\/[^)]+\.ttf)\)/);
     if (match) {
       const ttfUrl = match[1];
       const ttfRes = await fetch(ttfUrl);
       const arrayBuffer = await ttfRes.arrayBuffer();
-      
+
       const uint8Array = new Uint8Array(arrayBuffer);
-      let binary = '';
+      let binary = "";
       for (let i = 0; i < uint8Array.byteLength; i++) {
         binary += String.fromCharCode(uint8Array[i]);
       }
       const base64 = btoa(binary);
-      
+
       pdf.addFileToVFS(`${fontFamily}.ttf`, base64);
       pdf.addFont(`${fontFamily}.ttf`, fontFamily, "normal");
       return true;
@@ -87,16 +159,20 @@ const loadFontToPdf = async (pdf: jsPDF, fontFamily: string) => {
 
 export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
   const [templateUrl, setTemplateUrl] = useState<string | null>(null);
-  const [csvData, setCsvData] = useState<any[]>([]);
+  const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [csvColumns, setCsvColumns] = useState<string[]>([]);
-  
+
   const [nameColumn, setNameColumn] = useState<string>("");
   const [emailColumn, setEmailColumn] = useState<string>("");
   const [issuedFor, setIssuedFor] = useState("Certificate of Completion");
-  
+
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [showAiDialog, setShowAiDialog] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLogoUrl, setAiLogoUrl] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const templateInputRef = useRef<HTMLInputElement>(null);
@@ -104,11 +180,13 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
 
   // Inject Google Fonts CSS for the visual editor preview
   useEffect(() => {
-    const link = document.createElement('link');
-    link.href = `https://fonts.googleapis.com/css2?family=${GOOGLE_FONTS.map(f => f.replace(/ /g, '+')).join('&family=')}&display=swap`;
-    link.rel = 'stylesheet';
+    const link = document.createElement("link");
+    link.href = `https://fonts.googleapis.com/css2?family=${GOOGLE_FONTS.map((f) => f.replace(/ /g, "+")).join("&family=")}&display=swap`;
+    link.rel = "stylesheet";
     document.head.appendChild(link);
-    return () => { document.head.removeChild(link); };
+    return () => {
+      document.head.removeChild(link);
+    };
   }, []);
 
   const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,19 +207,19 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
           if (res.data.length > 0) {
             const cols = Object.keys(res.data[0] as object);
             setCsvColumns(cols);
-            setCsvData(res.data);
+            setCsvData(res.data as Record<string, string>[]);
             toast.success(`Loaded ${res.data.length} rows`);
-            
-            const lowerCols = cols.map(c => c.toLowerCase());
-            const nameIdx = lowerCols.findIndex(c => c.includes("name"));
+
+            const lowerCols = cols.map((c) => c.toLowerCase());
+            const nameIdx = lowerCols.findIndex((c) => c.includes("name"));
             if (nameIdx !== -1) setNameColumn(cols[nameIdx]);
-            const emailIdx = lowerCols.findIndex(c => c.includes("email"));
+            const emailIdx = lowerCols.findIndex((c) => c.includes("email"));
             if (emailIdx !== -1) setEmailColumn(cols[emailIdx]);
           } else {
             toast.error("CSV is empty");
           }
         },
-        error: (e) => toast.error(`CSV Error: ${e.message}`)
+        error: (e) => toast.error(`CSV Error: ${e.message}`),
       });
     }
   };
@@ -166,11 +244,11 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
   };
 
   const updateElement = (id: string, updates: Partial<CanvasElement>) => {
-    setElements(elements.map(el => el.id === id ? { ...el, ...updates } : el));
+    setElements(elements.map((el) => (el.id === id ? { ...el, ...updates } : el)));
   };
 
   const removeElement = (id: string) => {
-    setElements(elements.filter(el => el.id !== id));
+    setElements(elements.filter((el) => el.id !== id));
     if (selectedElementId === id) setSelectedElementId(null);
   };
 
@@ -183,7 +261,9 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
     try {
       const img = new Image();
       img.src = templateUrl;
-      await new Promise((r) => { img.onload = r; });
+      await new Promise((r) => {
+        img.onload = r;
+      });
 
       const pdf = new jsPDF({
         orientation: img.width > img.height ? "landscape" : "portrait",
@@ -192,7 +272,9 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
       });
 
       // Pre-load required fonts
-      const usedFonts = Array.from(new Set(elements.filter(e => e.type !== 'qr').map(e => e.fontFamily)));
+      const usedFonts = Array.from(
+        new Set(elements.filter((e) => e.type !== "qr").map((e) => e.fontFamily)),
+      );
       for (const font of usedFonts) {
         if (font && font !== "Helvetica" && font !== "Times") {
           toast.info(`Loading font: ${font}...`);
@@ -206,8 +288,9 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
 
       for (let i = 0; i < csvData.length; i++) {
         const row = csvData[i];
-        if (i > 0) pdf.addPage([img.width, img.height], img.width > img.height ? "landscape" : "portrait");
-        
+        if (i > 0)
+          pdf.addPage([img.width, img.height], img.width > img.height ? "landscape" : "portrait");
+
         pdf.addImage(img, "JPEG", 0, 0, img.width, img.height);
 
         const code = genCode();
@@ -230,7 +313,7 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
         elements.forEach((el) => {
           const x = el.x * scaleX;
           const y = el.y * scaleY;
-          
+
           if (el.type === "qr") {
             const w = (el.width || 100) * scaleX;
             const h = (el.height || 100) * scaleY;
@@ -242,22 +325,21 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
             else if (el.type === "csv" && el.column) text = row[el.column] || "";
 
             pdf.setTextColor(el.color);
-            pdf.setFontSize(el.fontSize * scaleX);
+            pdf.setFontSize(el.fontSize * scaleY);
             pdf.setFont(el.fontFamily, "normal");
 
-            // Align the text inside the element's box so the PDF matches the
-            // on-screen preview. The box spans `width` (scaled); jsPDF aligns
-            // text around an anchor x, so we compute the anchor per alignment.
-            const boxWidth = (el.width || DEFAULT_TEXT_WIDTH) * scaleX;
-            const align: TextAlign = el.textAlign || "left";
-            let anchorX = x;
-            if (align === "center") anchorX = x + boxWidth / 2;
-            else if (align === "right") anchorX = x + boxWidth;
+            const pad = 8;
+            const boxW = ((el.width || DEFAULT_TEXT_WIDTH) - pad) * scaleX;
+            const align: TextAlign = el.textAlign || "center";
+            let ax = x + (pad / 2) * scaleX;
+            const w = (el.width || DEFAULT_TEXT_WIDTH) * scaleX;
+            if (align === "center") ax = x + w / 2;
+            else if (align === "right") ax = x + w - (pad / 2) * scaleX;
 
-            pdf.text(String(text), anchorX, y + (el.fontSize * scaleX), {
+            pdf.text(String(text), ax, y + el.fontSize * scaleY, {
               baseline: "bottom",
               align,
-              maxWidth: boxWidth,
+              maxWidth: boxW,
             });
           }
         });
@@ -273,14 +355,36 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
     }
   };
 
-  const selectedElement = elements.find(e => e.id === selectedElementId);
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return toast.error("Enter a prompt describing your certificate design");
+    setAiLoading(true);
+    try {
+      const aiElements = await generateCertificateDesign(aiPrompt, aiLogoUrl || null, csvColumns);
+      setElements(aiElements);
+      setShowAiDialog(false);
+      setAiPrompt("");
+      setAiLogoUrl("");
+      toast.success(`AI generated ${aiElements.length} elements`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "AI generation failed");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const selectedElement = elements.find((e) => e.id === selectedElementId);
 
   return (
     <div className="fixed inset-0 z-[100] bg-background flex flex-col w-screen h-screen overflow-hidden">
       {/* Top Bar */}
       <div className="h-16 border-b border-border/50 bg-card/60 backdrop-blur flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
             <ArrowLeft className="h-4 w-4 mr-2" /> Exit Studio
           </Button>
           <div className="h-6 w-px bg-border/50"></div>
@@ -290,12 +394,18 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
           <div className="text-sm text-muted-foreground mr-4">
             {csvData.length > 0 ? `${csvData.length} records ready` : "No data loaded"}
           </div>
-          <Button 
-            className="shadow-lg shadow-primary/20" 
-            onClick={generatePDFs} 
+          <Button
+            className="shadow-lg shadow-primary/20"
+            onClick={generatePDFs}
             disabled={!templateUrl || csvData.length === 0 || generating}
           >
-            {generating ? "Generating PDFs..." : <><Download className="h-4 w-4 mr-2" /> Generate & Download</>}
+            {generating ? (
+              "Generating PDFs..."
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" /> Generate & Download
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -307,50 +417,105 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
             <h3 className="font-semibold text-sm mb-3 flex items-center gap-2 uppercase tracking-wider text-muted-foreground">
               <ImageIcon className="h-4 w-4 text-primary" /> 1. Template
             </h3>
-            <input type="file" accept="image/png, image/jpeg" className="hidden" ref={templateInputRef} onChange={handleTemplateUpload} />
-            <Button variant="outline" className="w-full justify-start bg-background/50" onClick={() => templateInputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-2" /> {templateUrl ? "Change Template" : "Upload Template"}
+            <input
+              type="file"
+              accept="image/png, image/jpeg"
+              className="hidden"
+              ref={templateInputRef}
+              onChange={handleTemplateUpload}
+            />
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-background/50"
+              onClick={() => templateInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4 mr-2" />{" "}
+              {templateUrl ? "Change Template" : "Upload Template"}
             </Button>
+          </div>
+
+          <div className="pt-6 border-t border-border/50">
+            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2 uppercase tracking-wider text-muted-foreground">
+              <Sparkles className="h-4 w-4 text-primary" /> AI Theme
+            </h3>
+            <Button
+              variant="secondary"
+              className="w-full justify-start bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary"
+              onClick={() => setShowAiDialog(true)}
+              disabled={!templateUrl}
+            >
+              <Wand className="h-4 w-4 mr-2" /> Generate with AI
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+              Describe your certificate style and AI will create the layout for you.
+            </p>
           </div>
 
           <div className="pt-6 border-t border-border/50">
             <h3 className="font-semibold text-sm mb-3 flex items-center gap-2 uppercase tracking-wider text-muted-foreground">
               <Type className="h-4 w-4 text-primary" /> 2. Data Source
             </h3>
-            <input type="file" accept=".csv" className="hidden" ref={csvInputRef} onChange={handleCsvUpload} />
-            <Button variant="outline" className="w-full justify-start mb-4 bg-background/50" onClick={() => csvInputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-2" /> {csvData.length > 0 ? `Change CSV (${csvData.length} rows)` : "Upload CSV"}
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden"
+              ref={csvInputRef}
+              onChange={handleCsvUpload}
+            />
+            <Button
+              variant="outline"
+              className="w-full justify-start mb-4 bg-background/50"
+              onClick={() => csvInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4 mr-2" />{" "}
+              {csvData.length > 0 ? `Change CSV (${csvData.length} rows)` : "Upload CSV"}
             </Button>
 
             {csvColumns.length > 0 && (
               <div className="space-y-4 bg-background/40 p-4 rounded-xl border border-border/40">
-                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Database Mapping</h4>
-                <p className="text-xs text-muted-foreground leading-relaxed">Map columns to save correctly to your database.</p>
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                  Database Mapping
+                </h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Map columns to save correctly to your database.
+                </p>
                 <div>
                   <Label className="text-xs">Name Column</Label>
-                  <select 
+                  <select
                     className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1"
-                    value={nameColumn} 
-                    onChange={e => setNameColumn(e.target.value)}
+                    value={nameColumn}
+                    onChange={(e) => setNameColumn(e.target.value)}
                   >
                     <option value="">Select column...</option>
-                    {csvColumns.map(c => <option key={c} value={c}>{c}</option>)}
+                    {csvColumns.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <Label className="text-xs">Email Column</Label>
-                  <select 
+                  <select
                     className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1"
-                    value={emailColumn} 
-                    onChange={e => setEmailColumn(e.target.value)}
+                    value={emailColumn}
+                    onChange={(e) => setEmailColumn(e.target.value)}
                   >
                     <option value="">Select column...</option>
-                    {csvColumns.map(c => <option key={c} value={c}>{c}</option>)}
+                    {csvColumns.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <Label className="text-xs">Issued For (Reason)</Label>
-                  <Input value={issuedFor} onChange={e => setIssuedFor(e.target.value)} className="h-9 mt-1 bg-background" />
+                  <Input
+                    value={issuedFor}
+                    onChange={(e) => setIssuedFor(e.target.value)}
+                    className="h-9 mt-1 bg-background"
+                  />
                 </div>
               </div>
             )}
@@ -360,45 +525,74 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
         {/* Main Canvas Area */}
         <div className="flex-1 overflow-auto bg-[#0a0a0c] bg-[url('https://transparenttextures.com/patterns/cubes.png')] flex items-center justify-center relative p-8">
           {templateUrl ? (
-            <div 
-              ref={canvasRef} 
+            <div
+              ref={canvasRef}
               className="relative shadow-2xl ring-1 ring-white/10 select-none bg-white"
-              style={{ width: '100%', maxWidth: '1000px', aspectRatio: 'auto' }}
+              style={{ width: "100%", maxWidth: "1000px", aspectRatio: "auto" }}
               onClick={() => setSelectedElementId(null)}
             >
-              <img src={templateUrl} alt="Template" className="w-full h-auto block pointer-events-none" />
-              
+              <img
+                src={templateUrl}
+                alt="Template"
+                className="w-full h-auto block pointer-events-none"
+              />
+
               {elements.map((el) => (
                 <Rnd
                   key={el.id}
                   position={{ x: el.x, y: el.y }}
                   size={
-                    el.type === 'qr'
+                    el.type === "qr"
                       ? { width: el.width || 100, height: el.height || 100 }
                       : { width: el.width || DEFAULT_TEXT_WIDTH, height: "auto" }
                   }
                   onDragStop={(e, d) => updateElement(el.id, { x: d.x, y: d.y })}
                   onResizeStop={(e, dir, ref, delta, pos) => {
-                    if (el.type === 'qr') {
-                      updateElement(el.id, { width: parseInt(ref.style.width), height: parseInt(ref.style.height), x: pos.x, y: pos.y });
+                    if (el.type === "qr") {
+                      updateElement(el.id, {
+                        width: parseInt(ref.style.width),
+                        height: parseInt(ref.style.height),
+                        x: pos.x,
+                        y: pos.y,
+                      });
                     } else {
-                      updateElement(el.id, { width: parseInt(ref.style.width), x: pos.x, y: pos.y });
+                      updateElement(el.id, {
+                        width: parseInt(ref.style.width),
+                        x: pos.x,
+                        y: pos.y,
+                      });
                     }
                   }}
                   bounds="parent"
-                  onClick={(e) => { e.stopPropagation(); setSelectedElementId(el.id); }}
-                  className={`absolute group cursor-move ${selectedElementId === el.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background z-20' : 'hover:ring-1 hover:ring-primary/50 z-10'}`}
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    setSelectedElementId(el.id);
+                  }}
+                  className={`absolute group cursor-move ${selectedElementId === el.id ? "ring-2 ring-primary ring-offset-2 ring-offset-background z-20" : "hover:ring-1 hover:ring-primary/50 z-10"}`}
                   style={{
                     color: el.color,
                     fontSize: `${el.fontSize}px`,
                     fontFamily: el.fontFamily,
                     lineHeight: 1,
                   }}
-                  enableResizing={el.type === 'qr' ? true : { left: true, right: true, top: false, bottom: false, topLeft: false, topRight: false, bottomLeft: false, bottomRight: false }}
+                  enableResizing={
+                    el.type === "qr"
+                      ? true
+                      : {
+                          left: true,
+                          right: true,
+                          top: false,
+                          bottom: false,
+                          topLeft: false,
+                          topRight: false,
+                          bottomLeft: false,
+                          bottomRight: false,
+                        }
+                  }
                 >
-                  {el.type === 'qr' ? (
+                  {el.type === "qr" ? (
                     <div className="w-full h-full bg-white/90 rounded border border-border flex items-center justify-center overflow-hidden">
-                       <QrCode className="w-1/2 h-1/2 text-black/50" />
+                      <QrCode className="w-1/2 h-1/2 text-black/50" />
                     </div>
                   ) : (
                     <div
@@ -408,8 +602,11 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
                       {el.label}
                     </div>
                   )}
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); removeElement(el.id); }}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeElement(el.id);
+                    }}
                     className="absolute -top-3 -right-3 bg-destructive text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-30"
                   >
                     <X className="h-3 w-3" />
@@ -433,27 +630,44 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
               <Plus className="h-4 w-4 text-primary" /> 3. Add Elements
             </h3>
             <div className="space-y-2">
-              <Button variant="secondary" className="w-full justify-start text-xs h-9 bg-background/50 hover:bg-background" onClick={() => addElement("qr", "QR Code")} disabled={!templateUrl}>
+              <Button
+                variant="secondary"
+                className="w-full justify-start text-xs h-9 bg-background/50 hover:bg-background"
+                onClick={() => addElement("qr", "QR Code")}
+                disabled={!templateUrl}
+              >
                 <QrCode className="h-4 w-4 mr-2 text-primary" /> QR Code
               </Button>
-              <Button variant="secondary" className="w-full justify-start text-xs h-9 bg-background/50 hover:bg-background" onClick={() => addElement("code", "{Certificate No}")} disabled={!templateUrl}>
+              <Button
+                variant="secondary"
+                className="w-full justify-start text-xs h-9 bg-background/50 hover:bg-background"
+                onClick={() => addElement("code", "{Certificate No}")}
+                disabled={!templateUrl}
+              >
                 <Hash className="h-4 w-4 mr-2 text-primary" /> Certificate No.
               </Button>
-              <Button variant="secondary" className="w-full justify-start text-xs h-9 bg-background/50 hover:bg-background" onClick={() => addElement("date", "{Date}")} disabled={!templateUrl}>
+              <Button
+                variant="secondary"
+                className="w-full justify-start text-xs h-9 bg-background/50 hover:bg-background"
+                onClick={() => addElement("date", "{Date}")}
+                disabled={!templateUrl}
+              >
                 <Calendar className="h-4 w-4 mr-2 text-primary" /> Today's Date
               </Button>
             </div>
 
             {csvColumns.length > 0 && (
               <div className="mt-6">
-                <h4 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wide">CSV Data Columns</h4>
+                <h4 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wide">
+                  CSV Data Columns
+                </h4>
                 <div className="flex flex-col gap-2">
-                  {csvColumns.map(c => (
-                    <Button 
-                      key={c} 
-                      variant="outline" 
-                      size="sm" 
-                      className="justify-start h-8 text-xs bg-background/50 border-border/60" 
+                  {csvColumns.map((c) => (
+                    <Button
+                      key={c}
+                      variant="outline"
+                      size="sm"
+                      className="justify-start h-8 text-xs bg-background/50 border-border/60"
                       onClick={() => addElement("csv", `{${c}}`, c)}
                       disabled={!templateUrl}
                     >
@@ -471,29 +685,37 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
                 <Settings className="h-4 w-4 text-primary" /> Properties
               </h3>
               <div className="space-y-4 bg-background/40 p-4 rounded-xl border border-border/40">
-                <div className="text-sm font-semibold mb-2 truncate text-primary">{selectedElement.label}</div>
-                
-                {selectedElement.type !== 'qr' && (
+                <div className="text-sm font-semibold mb-2 truncate text-primary">
+                  {selectedElement.label}
+                </div>
+
+                {selectedElement.type !== "qr" && (
                   <>
                     <div>
                       <Label className="text-xs font-medium">Font Family</Label>
-                      <select 
+                      <select
                         className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm mt-1"
-                        value={selectedElement.fontFamily} 
-                        onChange={e => updateElement(selectedElement.id, { fontFamily: e.target.value })}
+                        value={selectedElement.fontFamily}
+                        onChange={(e) =>
+                          updateElement(selectedElement.id, { fontFamily: e.target.value })
+                        }
                         style={{ fontFamily: selectedElement.fontFamily }}
                       >
-                        {GOOGLE_FONTS.map(f => (
-                          <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+                        {GOOGLE_FONTS.map((f) => (
+                          <option key={f} value={f} style={{ fontFamily: f }}>
+                            {f}
+                          </option>
                         ))}
                       </select>
                     </div>
                     <div>
                       <Label className="text-xs font-medium">Font Size (px)</Label>
-                      <Input 
-                        type="number" 
-                        value={selectedElement.fontSize} 
-                        onChange={e => updateElement(selectedElement.id, { fontSize: Number(e.target.value) })}
+                      <Input
+                        type="number"
+                        value={selectedElement.fontSize}
+                        onChange={(e) =>
+                          updateElement(selectedElement.id, { fontSize: Number(e.target.value) })
+                        }
                         className="h-9 mt-1 bg-background"
                       />
                     </div>
@@ -532,29 +754,34 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
                         </Button>
                       </div>
                       <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">
-                        Drag the left/right handles on the canvas to resize the text box. Text aligns within it.
+                        Drag the left/right handles on the canvas to resize the text box. Text
+                        aligns within it.
                       </p>
                     </div>
                     <div>
                       <Label className="text-xs font-medium">Text Color</Label>
                       <div className="flex gap-2 mt-1">
-                        <Input 
-                          type="color" 
-                          value={selectedElement.color} 
-                          onChange={e => updateElement(selectedElement.id, { color: e.target.value })}
+                        <Input
+                          type="color"
+                          value={selectedElement.color}
+                          onChange={(e) =>
+                            updateElement(selectedElement.id, { color: e.target.value })
+                          }
                           className="h-9 w-14 p-1 cursor-pointer bg-background"
                         />
-                        <Input 
-                          type="text" 
-                          value={selectedElement.color} 
-                          onChange={e => updateElement(selectedElement.id, { color: e.target.value })}
+                        <Input
+                          type="text"
+                          value={selectedElement.color}
+                          onChange={(e) =>
+                            updateElement(selectedElement.id, { color: e.target.value })
+                          }
                           className="h-9 flex-1 font-mono text-xs bg-background uppercase"
                         />
                       </div>
                     </div>
                   </>
                 )}
-                {selectedElement.type === 'qr' && (
+                {selectedElement.type === "qr" && (
                   <div className="text-xs text-muted-foreground leading-relaxed">
                     Resize the QR code directly on the canvas using the bottom-right drag handle.
                   </div>
@@ -564,6 +791,81 @@ export function MailmergeStudio({ onClose }: { onClose?: () => void }) {
           )}
         </div>
       </div>
+
+      {/* AI Generation Dialog */}
+      {showAiDialog && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Wand className="h-5 w-5 text-primary" /> AI Certificate Design
+              </h3>
+              <Button variant="ghost" size="icon" onClick={() => setShowAiDialog(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Describe the certificate style you want and AI will generate a layout with
+                positioned elements matching your theme.
+              </p>
+              <div>
+                <Label className="text-xs font-medium">Design prompt</Label>
+                <textarea
+                  className="w-full min-h-[100px] rounded-xl border border-input bg-background px-4 py-3 text-sm mt-1.5 resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  placeholder='e.g. "A modern tech certificate with a dark theme, green neon accents, bold sans-serif headings, suitable for a hackathon. Name should be prominent in the center."'
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium">Logo URL (optional)</Label>
+                <Input
+                  value={aiLogoUrl}
+                  onChange={(e) => setAiLogoUrl(e.target.value)}
+                  placeholder="https://example.com/logo.png"
+                  className="mt-1.5 bg-background"
+                />
+              </div>
+              {csvColumns.length > 0 && (
+                <div className="bg-background/50 rounded-xl p-3 border border-border/50">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">
+                    Available CSV columns:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {csvColumns.map((c) => (
+                      <span
+                        key={c}
+                        className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full"
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 p-6 border-t border-border bg-card/50">
+              <Button variant="outline" className="flex-1" onClick={() => setShowAiDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleAiGenerate}
+                disabled={!aiPrompt.trim() || aiLoading}
+              >
+                {aiLoading ? (
+                  "Generating..."
+                ) : (
+                  <>
+                    <Wand className="h-4 w-4 mr-2" /> Generate
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
