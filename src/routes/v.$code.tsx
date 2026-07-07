@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import { supabase, type ValidateRow } from "@/lib/supabase";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, ShieldX, Loader2, ArrowLeft } from "lucide-react";
+import { ShieldCheck, ShieldX, Loader2, ArrowLeft, Copy, Download, Share2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { toast, Toaster } from "sonner";
+import jsPDF from "jspdf";
 
 export const Route = createFileRoute("/v/$code")({
   component: VerifyPage,
@@ -41,8 +43,83 @@ function VerifyPage() {
     };
   }, [code]);
 
+  const verifyUrl = typeof window !== "undefined" ? window.location.href : "";
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(verifyUrl);
+      toast.success("Verification link copied");
+    } catch {
+      toast.error("Couldn't copy the link");
+    }
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Zuup Certificate — Verified",
+          text: row ? `${row.name}'s certificate for "${row.issued_for}" is verified authentic.` : "Verified Zuup certificate",
+          url: verifyUrl,
+        });
+      } catch {
+        // user cancelled the share sheet, nothing to do
+      }
+    } else {
+      handleCopyLink();
+    }
+  };
+
+  const handleDownloadPdf = () => {
+    if (!row) return;
+    try {
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a5" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      let y = 60;
+
+      pdf.setFontSize(18);
+      pdf.text("Zuup Certificate — Verified", pageWidth / 2, y, { align: "center" });
+
+      y += 40;
+      pdf.setFontSize(11);
+      const rows: [string, string][] = [
+        ["Issued to", row.name],
+        ["Email", row.email],
+        ["Issued for", row.issued_for],
+        [
+          "Issued date",
+          new Date(row.issued_date).toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          }),
+        ],
+        ["Certificate code", row.code],
+      ];
+      for (const [label, value] of rows) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`${label}:`, 40, y);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(value, 160, y);
+        y += 24;
+      }
+
+      y += 16;
+      pdf.setFontSize(9);
+      pdf.setTextColor(120);
+      pdf.text("Verified against Zuup's official record.", 40, y);
+      pdf.text(verifyUrl, 40, y + 14);
+
+      pdf.save(`zuup-certificate-${row.code}.pdf`);
+      toast.success("Certificate PDF downloaded");
+    } catch {
+      toast.error("Couldn't generate the PDF");
+    }
+  };
+
   return (
     <div className="min-h-screen">
+      <Toaster theme="dark" position="top-right" />
       <Header />
       <main className="max-w-2xl mx-auto px-6 py-12">
         <Link
@@ -107,6 +184,17 @@ function VerifyPage() {
             </dl>
             <div className="p-5 bg-muted/30 text-xs text-muted-foreground">
               This certificate is verified against Zuup's official record.
+            </div>
+            <div className="flex flex-wrap gap-2 p-5 border-t border-border">
+              <Button variant="outline" size="sm" onClick={handleCopyLink}>
+                <Copy className="h-4 w-4 mr-1.5" /> Copy Link
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleShare}>
+                <Share2 className="h-4 w-4 mr-1.5" /> Share
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
+                <Download className="h-4 w-4 mr-1.5" /> Download PDF
+              </Button>
             </div>
           </div>
         )}
