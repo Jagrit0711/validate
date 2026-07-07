@@ -73,7 +73,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Zuup Validate — Verify Certificates" },
-      { name: "description", content: "Verify the authenticity of Zuup certificates by code or QR scan." },
+      {
+        name: "description",
+        content: "Verify the authenticity of Zuup certificates by code or QR scan.",
+      },
       { name: "author", content: "Zuup" },
       { property: "og:title", content: "Zuup Validate" },
       { property: "og:description", content: "Verify Zuup certificates by code or QR scan." },
@@ -114,10 +117,6 @@ import { Footer } from "@/components/Footer";
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
-  useEffect(() => {
-    console.log("u ar enot that samrt leave it made by jagrit sachdev");
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex flex-col min-h-screen">
@@ -127,4 +126,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
